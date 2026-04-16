@@ -1,4 +1,4 @@
-const API = "PASTE_YOUR_GOOGLE_SCRIPT_URL_HERE";
+const API = "https://script.google.com/macros/s/AKfycbxKemN08WzZTcSCm_7H6zhVQBDOBUwad2RTzHzgYp0fjt_JJprYXTdbXdD4f4dv4SEL/exec";
 
 let orders = [];
 let activeOrder = null;
