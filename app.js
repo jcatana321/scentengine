@@ -64,22 +64,45 @@ function signOut() {
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────────
+function toArray(value) {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.rows)) return value.rows;
+  return [];
+}
+
 async function loadClientData() {
   document.getElementById("app").innerHTML = `
     <div class="loading">
       <div class="spinner"></div>
       <p>Loading your studio…</p>
     </div>`;
+
   try {
-    [ingredients, clientFormulas] = await Promise.all([
+    const [ingredientsRes, formulasRes] = await Promise.all([
       fetch(API + "?action=getIngredientsFull").then(r => r.json()),
       fetch(API + "?action=getClientFormulas&email=" + encodeURIComponent(currentUser.email)).then(r => r.json()),
     ]);
-  } catch {
-    ingredients = [];
-    clientFormulas = [];
+
+    console.log("Ingredients response:", ingredientsRes);
+    console.log("Client formulas response:", formulasRes);
+
+    ingredients = toArray(ingredientsRes);
+    clientFormulas = toArray(formulasRes);
+
+    renderPortal();
+  } catch (err) {
+    console.error("loadClientData failed:", err);
+    document.getElementById("app").innerHTML = `
+      <div class="login-screen">
+        <div class="login-card">
+          <div class="brand-name">Studio Perfumers</div>
+          <p class="login-sub">The portal loaded, but your data could not be retrieved.</p>
+          <p style="font-size:12px;opacity:.8;">Check console for details.</p>
+          <button class="ghost" onclick="loadClientData()">Try Again</button>
+        </div>
+      </div>`;
   }
-  renderPortal();
 }
 
 async function saveFormula() {
