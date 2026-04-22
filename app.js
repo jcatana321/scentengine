@@ -1,7 +1,7 @@
 const API = "https://script.google.com/macros/s/AKfycbxKemN08WzZTcSCm_7H6zhVQBDOBUwad2RTzHzgYp0fjt_JJprYXTdbXdD4f4dv4SEL/exec";
 
 // ── Replace with your Google Cloud OAuth 2.0 Client ID ──────────────────────
-const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = "165533929983-72rs2cobedvmu1b03345429p7q1l7slu.apps.googleusercontent.com";
 
 // ── Fixed prices per batch size (in USD cents). Update to match your pricing ─
 const BATCH_PRICES = {
@@ -24,7 +24,7 @@ let purchasing     = false;
 function initAuth() {
   if (typeof google === "undefined") { setTimeout(initAuth, 100); return; }
   google.accounts.id.initialize({
-    client_id: 165533929983-72rs2cobedvmu1b03345429p7q1l7slu.apps.googleusercontent.com,
+  client_id: GOOGLE_CLIENT_ID,
     callback: onSignIn,
     auto_select: true,
   });
@@ -42,7 +42,7 @@ function signOut() {
   google.accounts.id.disableAutoSelect();
   currentUser = null;
   rows = [{ name: "", weight: 0 }];
-  batchSize = 45;
+  batchSize = 45;initAuth()
   activeTab = "build";
   renderLogin();
 }
