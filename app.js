@@ -24,7 +24,7 @@ let purchasing     = false;
 function initAuth() {
   if (typeof google === "undefined") { setTimeout(initAuth, 100); return; }
   google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
+    client_id: 165533929983-72rs2cobedvmu1b03345429p7q1l7slu.apps.googleusercontent.com,
     callback: onSignIn,
     auto_select: true,
   });
