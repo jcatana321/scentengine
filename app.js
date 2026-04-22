@@ -32,17 +32,33 @@ function initAuth() {
   google.accounts.id.prompt();
 }
 
+function decodeJwtPayload(token) {
+  const base64Url = token.split(".")[1];
+  const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  return JSON.parse(atob(padded));
+}
+
 function onSignIn(response) {
-  const payload = JSON.parse(atob(response.credential.split(".")[1]));
-  currentUser = { email: payload.email, name: payload.name, picture: payload.picture };
-  loadClientData();
+  try {
+    const payload = decodeJwtPayload(response.credential);
+    currentUser = {
+      email: payload.email,
+      name: payload.name,
+      picture: payload.picture
+    };
+    loadClientData();
+  } catch (err) {
+    console.error("Sign-in parse failed:", err);
+    alert("Login worked but app crashed after sign-in.");
+  }
 }
 
 function signOut() {
   google.accounts.id.disableAutoSelect();
   currentUser = null;
   rows = [{ name: "", weight: 0 }];
-  batchSize = 45;initAuth()
+ batchSize = 45;
   activeTab = "build";
   renderLogin();
 }
