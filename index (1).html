@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scent Engine · Studio Perfumers</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,400&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: #F8F9FB; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 4px; }
+    .ing-row:hover { background: #F0F4FF !important; }
+    .ing-row:hover .add-btn { opacity: 1 !important; }
+    .fam-chip { transition: all 0.1s; cursor: pointer; }
+    .fam-chip:hover { opacity: 0.85; }
+    .shake { animation: shake 0.4s ease; }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo, useRef, useEffect } = React;
+
+    // ── Colour system ────────────────────────────────────────────────────────
+    const FAMILY_COLORS = {
+      Floral:               { bg: "#FFF0F5", dot: "#E8628A", text: "#9B2C4E" },
+      Woody:                { bg: "#F5F0E8", dot: "#8B6914", text: "#5C4209" },
+      Amber:                { bg: "#FFF8EC", dot: "#D97706", text: "#92400E" },
+      Citrus:               { bg: "#FEFCE8", dot: "#CA8A04", text: "#78350F" },
+      Musk:                 { bg: "#F0F0FF", dot: "#7C3AED", text: "#4C1D95" },
+      "Macrocyclic musk":   { bg: "#F5F0FF", dot: "#9333EA", text: "#581C87" },
+      "Polyclic musk":      { bg: "#EEF0FF", dot: "#6366F1", text: "#312E81" },
+      Aromatic:             { bg: "#ECFDF5", dot: "#059669", text: "#064E3B" },
+      Herbacious:           { bg: "#F0FDF4", dot: "#16A34A", text: "#14532D" },
+      Herbs:                { bg: "#ECFEF5", dot: "#10B981", text: "#064E3B" },
+      Fruity:               { bg: "#FFF7ED", dot: "#EA580C", text: "#7C2D12" },
+      Sweet:                { bg: "#FDF4FF", dot: "#C026D3", text: "#701A75" },
+      Gourmound:            { bg: "#FEF9EC", dot: "#D97706", text: "#713F12" },
+      Molecule:             { bg: "#F0F9FF", dot: "#0284C7", text: "#0C4A6E" },
+      Aldehyde:             { bg: "#F0FFFE", dot: "#0D9488", text: "#134E4A" },
+      Leather:              { bg: "#F3F0EB", dot: "#78350F", text: "#451A03" },
+      Ionones:              { bg: "#FFF0F9", dot: "#DB2777", text: "#831843" },
+      Lactone:              { bg: "#F0FFFD", dot: "#0F766E", text: "#134E4A" },
+      Ketone:               { bg: "#FFF0EE", dot: "#DC2626", text: "#7F1D1D" },
+      "Terpene hydrocarbon":{ bg: "#F0FFF4", dot: "#166534", text: "#14532D" },
+      "Fragrance oil":      { bg: "#F8F5FF", dot: "#7C3AED", text: "#4C1D95" },
+      "Perfume bases":      { bg: "#F5F5F5", dot: "#6B7280", text: "#374151" },
+      Uncategorised:        { bg: "#F9FAFB", dot: "#9CA3AF", text: "#6B7280" },
+      Other:                { bg: "#F9FAFB", dot: "#9CA3AF", text: "#6B7280" },
+    };
+    const familyColor = (f) => FAMILY_COLORS[f] || FAMILY_COLORS.Other;
+
+    const STRENGTHS = [
+      { label: "Trace",    pct: 0.5,  color: "#E2E8F0" },
+      { label: "Light",    pct: 2,    color: "#BAE6FD" },
+      { label: "Medium",   pct: 5,    color: "#6EE7B7" },
+      { label: "Strong",   pct: 12,   color: "#FCD34D" },
+      { label: "Dominant", pct: 25,   color: "#F87171" },
+    ];
+
+    const ZONES = ["top", "heart", "base"];
+    const ZONE_LABELS = { top: "Top", heart: "Heart", base: "Base" };
+    const ZONE_COLORS = { top: "#DBEAFE", heart: "#FCE7F3", base: "#FEF3C7" };
+    const ZONE_DOT    = { top: "#3B82F6", heart: "#EC4899", base: "#F59E0B" };
+
+    // ── 25 House Accords ──────────────────────────────────────────────────────
+    const ACCORDS = [
+      { id:"A1",  num:1,  name:"Iris & Cashmere",              family:"Musk",       tags:["Fresh/Clean","Sweet","Resinous"],   descriptor:"Soft, powdery and cozy — orris close to the skin" },
+      { id:"A2",  num:2,  name:"Madagascar Vanilla & Sandalwood",family:"Sweet",    tags:["Sweet","Gourmand","Woody"],         descriptor:"Creamy vanilla bean and sandalwood" },
+      { id:"A3",  num:3,  name:"Hydrangea & Lilac",             family:"Floral",    tags:["Floral","Green","Fresh/Clean"],     descriptor:"Green dewy floral — lilac and lily of the valley" },
+      { id:"A4",  num:4,  name:"Ambrette & Oak",                family:"Amber",     tags:["Sweet","Earthy","Resinous"],        descriptor:"Dark sweet dominant amber — warm and seductive" },
+      { id:"A5",  num:5,  name:"Peony, Freesia & Mimosa",       family:"Floral",    tags:["Floral","Fresh/Clean","Sweet"],     descriptor:"Soft elegant soapy cherry blossom — fresh pink floral" },
+      { id:"A6",  num:6,  name:"Smoky Maté Tea & Verbena",      family:"Citrus",    tags:["Citrus","Earthy","Aromatic"],       descriptor:"Fresh citrus bergamot and mandarin with smoky bottom" },
+      { id:"A7",  num:7,  name:"Black Currant & Patchouli",     family:"Herbacious",tags:["Earthy","Woody","Fruity"],          descriptor:"Vibrant herbal — black currant and patchouli" },
+      { id:"A8",  num:8,  name:"Clearwood & Sage",              family:"Woody",     tags:["Woody","Aromatic","Fresh/Clean"],   descriptor:"Fresh clean crisp clearwood and sage" },
+      { id:"A9",  num:9,  name:"Cedarwood & Fresh Incense",     family:"Woody",     tags:["Woody","Earthy","Resinous"],        descriptor:"Dark smoky cedarwood and incense" },
+      { id:"A10", num:10, name:"Hinoki & Juniper",              family:"Herbacious",tags:["Aromatic","Woody","Fresh/Clean"],   descriptor:"Fresh pine and juniper — outdoors forest" },
+      { id:"A11", num:11, name:"Cardamom & Tobacco Leaf",       family:"Aromatic",  tags:["Gourmand","Spicy","Resinous"],      descriptor:"Sweet smoky tobacco leaf and cardamom" },
+      { id:"A12", num:12, name:"Indian Jasmine & Bois de Rose", family:"Floral",    tags:["Floral","Earthy","Woody"],          descriptor:"Classic Indian jasmine and rose with cedarwood" },
+      { id:"A13", num:13, name:"Grapefruit & Pink Peppercorn",  family:"Citrus",    tags:["Citrus","Spicy","Fresh/Clean"],     descriptor:"Vibrant sparkling spicy grapefruit and pink pepper" },
+      { id:"A14", num:14, name:"Fig & Cypress",                 family:"Herbacious",tags:["Aromatic","Woody","Green"],         descriptor:"Ivy green cypress and fig — earthy evergreen" },
+      { id:"A15", num:15, name:"Salted Caramel & Saffron",      family:"Sweet",     tags:["Gourmand","Sweet","Resinous"],      descriptor:"Intense edible saffron and butterscotch" },
+      { id:"A16", num:16, name:"Rose Wardia & Oud",             family:"Floral",    tags:["Floral","Resinous","Fruity"],       descriptor:"Velvety deep rose with dark fruits and oud" },
+      { id:"A17", num:17, name:"Cognac & Suede",                family:"Leather",   tags:["Resinous","Sweet","Woody"],         descriptor:"Boozy leather cognac and suede" },
+      { id:"A18", num:18, name:"Lavender & Black Pepper",       family:"Aromatic",  tags:["Aromatic","Spicy","Floral"],        descriptor:"Creamy lavender with black pepper bringing green tones" },
+      { id:"A19", num:19, name:"Coconut Water & Musk",          family:"Fruity",    tags:["Fruity","Fresh/Clean","Resinous"],  descriptor:"Light creamy tropical coconut and soft musk" },
+      { id:"A20", num:20, name:"Coffee, Mocha & Cream",         family:"Sweet",     tags:["Gourmand","Sweet"],                 descriptor:"Coffee mocha vanilla bean roasted caramel" },
+      { id:"A21", num:21, name:"Tomato Leaf, Basil & Rhubarb",  family:"Herbacious",tags:["Green","Aromatic","Fresh/Clean"],   descriptor:"Green tomato leaf and ivy — fresh garden" },
+      { id:"A22", num:22, name:"Agarwood & Chai",               family:"Amber",     tags:["Resinous","Spicy","Gourmand"],      descriptor:"Dark chai tea cardamom and oud — luxurious spices" },
+      { id:"A23", num:23, name:"Peach Nectarine & Apricot",     family:"Fruity",    tags:["Fruity","Fresh/Clean","Sweet"],     descriptor:"Sparkling vibrant tropical melon and passionfruit" },
+      { id:"A24", num:24, name:"Sea Salt & Driftwood",          family:"Molecule",  tags:["Fresh/Clean","Earthy","Woody"],     descriptor:"Aquatic sea salt and fresh breeze with driftwood" },
+      { id:"A25", num:25, name:"Magnolia & Orange Flower",      family:"Floral",    tags:["Floral","Sweet","Resinous"],        descriptor:"Bold white floral — classic elegant magnolia" },
+    ];
+
+    // ── Full ingredient database ──────────────────────────────────────────────
+    const INGREDIENTS = [{"id":1,"name":"360 Perry Eliss","family":"Fragrance oil","ifra":null},{"id":2,"name":"5-methyl-2-phenyl-2-hexenal","family":"Sweet","ifra":8.0},{"id":3,"name":"6-methyl- Quinoline","family":"Leather","ifra":null},{"id":4,"name":"Abs Ambergris","family":"Molecule","ifra":null},{"id":5,"name":"Agar Oud","family":"Woody","ifra":null},{"id":6,"name":"Agarwood","family":"Uncategorised","ifra":null},{"id":7,"name":"Aldehyde 16 Strawberry","family":"Fruity","ifra":15.0},{"id":8,"name":"Aldehyde C10","family":"Molecule","ifra":null},{"id":9,"name":"Aldehyde C11","family":"Molecule","ifra":null},{"id":10,"name":"Aldehyde C11 Undecylenic","family":"Aldehyde","ifra":null},{"id":11,"name":"Aldehyde C12 Mma","family":"Molecule","ifra":0.25},{"id":12,"name":"Aldehyde C8","family":"Molecule","ifra":null},{"id":13,"name":"Aldehyde C9","family":"Molecule","ifra":null},{"id":14,"name":"Ally Amyl Glycolate","family":"Fruity","ifra":0.25},{"id":15,"name":"Amber","family":"Amber","ifra":null},{"id":16,"name":"Amber Extreme 10%","family":"Uncategorised","ifra":null},{"id":17,"name":"Amber white","family":"Amber","ifra":null},{"id":18,"name":"AmberXtreme 10%dpg","family":"Ketone","ifra":1.0},{"id":19,"name":"Ambergris","family":"Uncategorised","ifra":null},{"id":20,"name":"Ambrettolide","family":"Macrocyclic musk","ifra":0.5},{"id":21,"name":"Ambroxan","family":"Amber","ifra":null},{"id":22,"name":"Anais Anais","family":"Fragrance oil","ifra":null},{"id":23,"name":"Anisaldehyde","family":"Aldehyde","ifra":1.4},{"id":24,"name":"Annis Annis","family":"Fragrance oil","ifra":null},{"id":25,"name":"Annointment oil","family":"Perfume bases","ifra":null},{"id":26,"name":"Anti anxiety base","family":"Perfume bases","ifra":null},{"id":27,"name":"Apple","family":"Fruity","ifra":null},{"id":28,"name":"Apple Fantasy","family":"Fruity","ifra":null},{"id":29,"name":"Aqua De Gio","family":"Uncategorised","ifra":null},{"id":30,"name":"Archangel Gab","family":"Perfume bases","ifra":null},{"id":31,"name":"Armani  Perfume 8 oz","family":"Fragrance oil","ifra":null},{"id":32,"name":"Armani code","family":"Fragrance oil","ifra":null},{"id":33,"name":"Armani type","family":"Fragrance oil","ifra":null},{"id":34,"name":"Aubrey Oil","family":"Floral","ifra":null},{"id":35,"name":"Baby Oil","family":"Uncategorised","ifra":null},{"id":36,"name":"Baccarat Type","family":"Uncategorised","ifra":null},{"id":37,"name":"Balsam fir needle 4oz","family":"Herbacious","ifra":null},{"id":38,"name":"Balsam fir needle Sos 4oz","family":"Herbacious","ifra":null},{"id":39,"name":"Banana","family":"Fruity","ifra":null},{"id":40,"name":"Basil","family":"Herbacious","ifra":null},{"id":41,"name":"Bay Leave","family":"Herbs","ifra":null},{"id":42,"name":"Benzaldehyde","family":"Fruity","ifra":0.25},{"id":43,"name":"Benzoin","family":"Amber","ifra":null},{"id":44,"name":"Benzoin 5ml Lola","family":"Amber","ifra":null},{"id":45,"name":"Benzoin Resinoid, Siam","family":"Sweet","ifra":null},{"id":46,"name":"Benzoin Resinoid, Siam","family":"Woody","ifra":null},{"id":47,"name":"Benzyl Acetate","family":"Floral","ifra":30.0},{"id":48,"name":"Benzyl Salicylate","family":"Floral","ifra":null},{"id":49,"name":"Benzyl Salicylate","family":"Floral","ifra":null},{"id":50,"name":"Bergamal","family":"Citrus","ifra":null},{"id":51,"name":"Bergamont Naz","family":"Citrus","ifra":null},{"id":52,"name":"Bergamot","family":"Citrus","ifra":null},{"id":53,"name":"Bergamot & Ambergris","family":"Amber","ifra":null},{"id":54,"name":"Birch","family":"Aromatic","ifra":null},{"id":55,"name":"Black Butter","family":"Fragrance oil","ifra":null},{"id":56,"name":"Black Pepper India","family":"Aromatic","ifra":null},{"id":57,"name":"Black cumin","family":"Gourmound","ifra":null},{"id":58,"name":"Black current","family":"Herbacious","ifra":null},{"id":59,"name":"Black current Lola","family":"Herbacious","ifra":null},{"id":60,"name":"Black pepper","family":"Gourmound","ifra":null},{"id":61,"name":"Bleu De Chanel","family":"Perfume bases","ifra":null},{"id":62,"name":"Blood Orange 8oz","family":"Citrus","ifra":null},{"id":63,"name":"Bloom","family":"Perfume bases","ifra":null},{"id":64,"name":"Born In Roma","family":"Perfume bases","ifra":null},{"id":65,"name":"Bran Abs","family":"Uncategorised","ifra":null},{"id":66,"name":"Butterscotch Vanilla","family":"Sweet","ifra":null},{"id":67,"name":"Calone 1951","family":"Molecule","ifra":0.05},{"id":68,"name":"Calvin Klein Eternity","family":"Perfume bases","ifra":null},{"id":69,"name":"Camphor","family":"Aromatic","ifra":null},{"id":70,"name":"Cantaloupe","family":"Fruity","ifra":null},{"id":71,"name":"Cardamom","family":"Gourmound","ifra":null},{"id":72,"name":"Cashmeran","family":"Musk","ifra":2.0},{"id":73,"name":"Cassia bark","family":"Aromatic","ifra":null},{"id":74,"name":"Cassie Abs Spain","family":"Floral","ifra":null},{"id":75,"name":"Cassis Black Current","family":"Uncategorised","ifra":null},{"id":76,"name":"Cedarwood","family":"Woody","ifra":null},{"id":77,"name":"Cedarwood Virginia","family":"Woody","ifra":20.0},{"id":78,"name":"Cerezoate(fruitaleur)","family":"Fruity","ifra":null},{"id":79,"name":"Chanel 5","family":"Fragrance oil","ifra":null},{"id":80,"name":"Chanel chance","family":"Fragrance oil","ifra":null},{"id":81,"name":"Cherry","family":"Fruity","ifra":null},{"id":82,"name":"Cherry Blossom 16oz Sos","family":"Floral","ifra":null},{"id":83,"name":"Chocolate extract","family":"Sweet","ifra":null},{"id":84,"name":"Cinnamon","family":"Gourmound","ifra":null},{"id":85,"name":"Cis 3 Hexenyl Acetate 10%","family":"Herbacious","ifra":0.16},{"id":86,"name":"Cis Jasmone","family":"Floral","ifra":3.0},{"id":87,"name":"Cistus Abs","family":"Amber","ifra":null},{"id":88,"name":"Citral","family":"Citrus","ifra":0.62},{"id":89,"name":"Citronella","family":"Citrus","ifra":null},{"id":90,"name":"Citronellol 950","family":"Citrus","ifra":null},{"id":91,"name":"Civetone 1% Sda","family":"Amber","ifra":null},{"id":92,"name":"Civettone 10% IPM","family":"Musk","ifra":null},{"id":93,"name":"Clary sage","family":"Aromatic","ifra":null},{"id":94,"name":"Clearwood","family":"Woody","ifra":null},{"id":95,"name":"Clementine & Green tea","family":"Fruity","ifra":null},{"id":96,"name":"Clove","family":"Gourmound","ifra":null},{"id":97,"name":"Clove Stem Madagascar","family":"Aromatic","ifra":null},{"id":98,"name":"Coco piña","family":"Fruity","ifra":null},{"id":99,"name":"Cocomango","family":"Fruity","ifra":null},{"id":100,"name":"Coconut","family":"Fruity","ifra":null},{"id":101,"name":"Coffee Florida","family":"Sweet","ifra":null},{"id":102,"name":"Coffee Leather","family":"Perfume bases","ifra":null},{"id":103,"name":"Coffee Trescent","family":"Aromatic","ifra":null},{"id":104,"name":"Coriander","family":"Herbacious","ifra":null},{"id":105,"name":"Coumarin Natural","family":"Sweet","ifra":1.5},{"id":106,"name":"Creamy","family":"Perfume bases","ifra":null},{"id":107,"name":"Creed Silver Mountain Water","family":"Uncategorised","ifra":null},{"id":108,"name":"Creed aventus","family":"Fragrance oil","ifra":null},{"id":109,"name":"Crystal Import","family":"Woody","ifra":null},{"id":110,"name":"Crystal cleaner","family":"Perfume bases","ifra":null},{"id":111,"name":"Cucumber Extract","family":"Herbacious","ifra":null},{"id":112,"name":"CucumberMelon","family":"Fruity","ifra":null},{"id":113,"name":"Cyclamen Aldehyde","family":"Aldehyde","ifra":0.77},{"id":114,"name":"Cypress","family":"Citrus","ifra":null},{"id":115,"name":"Cypress mex","family":"Citrus","ifra":null},{"id":116,"name":"Cypriol","family":"Herbacious","ifra":null},{"id":117,"name":"Damascol","family":"Floral","ifra":5.0},{"id":118,"name":"Dark Amber 5ML","family":"Amber","ifra":null},{"id":119,"name":"Dayana Special Oil","family":"Fragrance oil","ifra":null},{"id":120,"name":"Delta Delactone","family":"Lactone","ifra":null},{"id":121,"name":"Dihydro Ionne Beta","family":"Uncategorised","ifra":null},{"id":122,"name":"Dihydro Mycenol","family":"Floral","ifra":75.0},{"id":123,"name":"Dihydro Myrcenol","family":"Ionones","ifra":null},{"id":124,"name":"Dior savage","family":"Fragrance oil","ifra":null},{"id":125,"name":"Dolce And gabana","family":"Fragrance oil","ifra":null},{"id":126,"name":"Dominance","family":"Perfume bases","ifra":null},{"id":127,"name":"Dragons blood","family":"Musk","ifra":null},{"id":128,"name":"E blossom","family":"Floral","ifra":null},{"id":129,"name":"Edward rose 5ml","family":"Floral","ifra":null},{"id":130,"name":"Egyptian musk","family":"Musk","ifra":null},{"id":131,"name":"Egyptian musk import","family":"Musk","ifra":null},{"id":132,"name":"Elegance","family":"Perfume bases","ifra":null},{"id":133,"name":"Elemi","family":"Floral","ifra":null},{"id":134,"name":"Envy W","family":"Fragrance oil","ifra":null},{"id":135,"name":"Eternity","family":"Fragrance oil","ifra":null},{"id":136,"name":"Ethyl Linalyl Acetate","family":"Citrus","ifra":40.0},{"id":137,"name":"Ethyl Vanillin","family":"Gourmound","ifra":null},{"id":138,"name":"Ethyl maltol","family":"Sweet","ifra":10.0},{"id":139,"name":"Ethylene Brassylate","family":"Macrocyclic musk","ifra":10.0},{"id":140,"name":"Eucalyptus","family":"Aromatic","ifra":null},{"id":141,"name":"Eugenyl Acetate","family":"Uncategorised","ifra":null},{"id":142,"name":"Evening Jasmine","family":"Floral","ifra":null},{"id":143,"name":"Evening primrose","family":"Floral","ifra":null},{"id":144,"name":"Evewood Natwist","family":"Uncategorised","ifra":null},{"id":145,"name":"Exotic Teakwood","family":"Woody","ifra":null},{"id":146,"name":"Fahrenheit","family":"Fragrance oil","ifra":null},{"id":147,"name":"Fenugreek Ext","family":"Uncategorised","ifra":null},{"id":148,"name":"Firascone","family":"Floral","ifra":null},{"id":149,"name":"Fix  505","family":"Molecule","ifra":null},{"id":150,"name":"Fixative Base Citrus","family":"Molecule","ifra":null},{"id":151,"name":"Fixolide","family":"Polyclic musk","ifra":2.5},{"id":152,"name":"Floral","family":"Perfume bases","ifra":null},{"id":153,"name":"Floral Accord","family":"Uncategorised","ifra":null},{"id":154,"name":"Floral aldehyde","family":"Molecule","ifra":null},{"id":155,"name":"Florol","family":"Floral","ifra":2.1},{"id":156,"name":"Flower bomb","family":"Fragrance oil","ifra":null},{"id":157,"name":"Flower bomb midnight","family":"Fragrance oil","ifra":null},{"id":158,"name":"Forest fresh pine  30ML","family":"Woody","ifra":null},{"id":159,"name":"Fragrance Fixative","family":"Molecule","ifra":null},{"id":160,"name":"Fraistone","family":"Fruity","ifra":null},{"id":161,"name":"Frankincense","family":"Woody","ifra":null},{"id":162,"name":"Frankincense Essen","family":"Woody","ifra":null},{"id":163,"name":"Fresco","family":"Perfume bases","ifra":null},{"id":164,"name":"Fresh Cut grass","family":"Herbacious","ifra":null},{"id":165,"name":"Fresh Grapefruit","family":"Citrus","ifra":null},{"id":166,"name":"Fresh Rain","family":"Molecule","ifra":null},{"id":167,"name":"Frida Lab","family":"Amber","ifra":null},{"id":168,"name":"Galaxolide","family":"Molecule","ifra":12.0},{"id":169,"name":"Galbanum Rsd Frg10%","family":"Aromatic","ifra":null},{"id":170,"name":"Gamma Decalactone","family":"Uncategorised","ifra":null},{"id":171,"name":"Gardenia tube rose 2oz","family":"Floral","ifra":null},{"id":172,"name":"Geosmin","family":"Molecule","ifra":null},{"id":173,"name":"Geranium","family":"Floral","ifra":null},{"id":174,"name":"Ginger","family":"Aromatic","ifra":null},{"id":175,"name":"Ginger Dilute","family":"Herbacious","ifra":null},{"id":176,"name":"Ginger Madagacar","family":"Aromatic","ifra":8.0},{"id":177,"name":"Ginger Root","family":"Herbs","ifra":null},{"id":178,"name":"Globanolide","family":"Polyclic musk","ifra":null},{"id":179,"name":"Glycolierral","family":"Floral","ifra":8.0},{"id":180,"name":"Golden Sand","family":"Sweet","ifra":null},{"id":181,"name":"Golden sand","family":"Perfume bases","ifra":null},{"id":182,"name":"Good Girl","family":"Perfume bases","ifra":null},{"id":183,"name":"Grapefruit Naz","family":"Citrus","ifra":null},{"id":184,"name":"Green Apple","family":"Fruity","ifra":null},{"id":185,"name":"Green Apple money","family":"Fragrance oil","ifra":null},{"id":186,"name":"Green Mate 2%","family":"Uncategorised","ifra":null},{"id":187,"name":"Green cardamom 2oz","family":"Gourmound","ifra":null},{"id":188,"name":"Green tea","family":"Herbacious","ifra":null},{"id":189,"name":"Grosjman Accord","family":"Perfume bases","ifra":null},{"id":190,"name":"Guaiac Wood","family":"Woody","ifra":null},{"id":191,"name":"Guava","family":"Fruity","ifra":null},{"id":192,"name":"Gucci Envy Col","family":"Aromatic","ifra":null},{"id":193,"name":"Gucci Flora Jasmine","family":"Uncategorised","ifra":null},{"id":194,"name":"Gucci guilty","family":"Fragrance oil","ifra":null},{"id":195,"name":"Habanolide","family":"Macrocyclic musk","ifra":3.0},{"id":196,"name":"Habanolide","family":"Musk","ifra":null},{"id":197,"name":"Hedione","family":"Floral","ifra":null},{"id":198,"name":"Helional","family":"Molecule","ifra":null},{"id":199,"name":"Heliotropin 20% Dpg","family":"Floral","ifra":46.0},{"id":200,"name":"Helvetolide","family":"Macrocyclic musk","ifra":5.0},{"id":201,"name":"Hexenol-3-Cis","family":"Herbacious","ifra":8.0},{"id":202,"name":"Hibiscus  Lola 1/4oz","family":"Floral","ifra":null},{"id":203,"name":"Hibiscus Sos","family":"Floral","ifra":null},{"id":204,"name":"Hiniscus Passion 1/4 Oz","family":"Fruity","ifra":null},{"id":205,"name":"Hinoki","family":"Uncategorised","ifra":null},{"id":206,"name":"Honey Essence","family":"Sweet","ifra":13.0},{"id":207,"name":"Honey Lactone","family":"Sweet","ifra":2.0},{"id":208,"name":"Honeysuckle","family":"Sweet","ifra":null},{"id":209,"name":"Honeysuckle","family":"Sweet","ifra":null},{"id":210,"name":"Hydrocarbosine","family":"Amber","ifra":null},{"id":211,"name":"Hydroxycitronellal","family":"Citrus","ifra":2.1},{"id":212,"name":"Hydroxycitronellal Pure","family":"Citrus","ifra":2.0},{"id":213,"name":"ISO E Super","family":"Woody","ifra":10.0},{"id":214,"name":"Imagination LV","family":"Perfume bases","ifra":null},{"id":215,"name":"Indian sandalwood","family":"Woody","ifra":null},{"id":216,"name":"Indole","family":"Floral","ifra":null},{"id":217,"name":"Invictus","family":"Fragrance oil","ifra":null},{"id":218,"name":"Ionone Alpha","family":"Ionones","ifra":1.4},{"id":219,"name":"Ionone Beta","family":"Floral","ifra":0.97},{"id":220,"name":"Iris Key Accord","family":"Floral","ifra":null},{"id":221,"name":"Iso E Super","family":"Molecule","ifra":10.0},{"id":222,"name":"Isoeugenol","family":"Aldehyde","ifra":0.75},{"id":223,"name":"Italian Bergamot","family":"Citrus","ifra":null},{"id":224,"name":"Ivy Base","family":"Herbacious","ifra":null},{"id":225,"name":"Japanese cherry blossom 16oz","family":"Floral","ifra":null},{"id":226,"name":"Jasmacyclene","family":"Floral","ifra":10.0},{"id":227,"name":"Jasmine 1 oz","family":"Floral","ifra":null},{"id":228,"name":"Jasmine Abs","family":"Floral","ifra":null},{"id":229,"name":"Jasmine Egyptian","family":"Floral","ifra":null},{"id":230,"name":"Jasmine Ninon","family":"Floral","ifra":null},{"id":231,"name":"Jasmine primrose","family":"Floral","ifra":null},{"id":232,"name":"Javanol","family":"Woody","ifra":null},{"id":233,"name":"Juniper","family":"Fruity","ifra":null},{"id":234,"name":"Juniper Berry Eo Bulgaria","family":"Herbacious","ifra":null},{"id":235,"name":"Juniper Berry Eo Hungary","family":"Fruity","ifra":null},{"id":236,"name":"Kephalis","family":"Woody","ifra":0.25},{"id":237,"name":"Koavone Iff","family":"Uncategorised","ifra":null},{"id":238,"name":"Lavendar 40/42","family":"Floral","ifra":null},{"id":239,"name":"Lavender","family":"Floral","ifra":null},{"id":240,"name":"Lavindin 10%","family":"Aromatic","ifra":null},{"id":241,"name":"Lemon","family":"Citrus","ifra":null},{"id":242,"name":"Lemon Verbena","family":"Fragrance oil","ifra":null},{"id":243,"name":"Lemongrass","family":"Citrus","ifra":null},{"id":244,"name":"Liebe","family":"Perfume bases","ifra":null},{"id":245,"name":"Liebe perfume 2oz","family":"Perfume bases","ifra":null},{"id":246,"name":"Lilas pure 2oz","family":"Floral","ifra":null},{"id":247,"name":"Lilial Sub","family":"Floral","ifra":null},{"id":248,"name":"Lilith perfume 3oz","family":"Perfume bases","ifra":null},{"id":249,"name":"Lily of The Valley","family":"Floral","ifra":null},{"id":250,"name":"Lime","family":"Citrus","ifra":null},{"id":251,"name":"Limeonene D","family":"Terpene hydrocarbon","ifra":2.0},{"id":252,"name":"Linalool","family":"Molecule","ifra":12.0},{"id":253,"name":"Linalyl Acetate","family":"Floral","ifra":2.5},{"id":254,"name":"Linden Blossom","family":"Floral","ifra":null},{"id":255,"name":"Lisea Cuba Dilute","family":"Citrus","ifra":null},{"id":256,"name":"Litchi","family":"Fruity","ifra":null},{"id":257,"name":"Litsea Cubeba 2oz","family":"Citrus","ifra":null},{"id":258,"name":"Lotus","family":"Floral","ifra":null},{"id":259,"name":"Lotus 8 oz","family":"Floral","ifra":null},{"id":260,"name":"Lotus Flower","family":"Floral","ifra":null},{"id":261,"name":"Lotus Nemat","family":"Floral","ifra":null},{"id":262,"name":"Lotus cream","family":"Floral","ifra":null},{"id":263,"name":"Lotus floer portable 30ml","family":"Perfume bases","ifra":null},{"id":264,"name":"Luscious","family":"Perfume bases","ifra":null},{"id":265,"name":"Lustro","family":"Uncategorised","ifra":null},{"id":266,"name":"MYRRH Lola","family":"Woody","ifra":null},{"id":267,"name":"Madagascar Vanilla","family":"Sweet","ifra":29.0},{"id":268,"name":"Madagascar Vanilla Abs 10% Dpg","family":"Gourmound","ifra":null},{"id":269,"name":"Magnolia Flower Eo China","family":"Floral","ifra":null},{"id":270,"name":"Mahogany","family":"Woody","ifra":null},{"id":271,"name":"Mahogany Teakwood","family":"Woody","ifra":null},{"id":272,"name":"Mahogonate","family":"Woody","ifra":null},{"id":273,"name":"Mandarin mex","family":"Citrus","ifra":null},{"id":274,"name":"Manderin Sos","family":"Citrus","ifra":null},{"id":275,"name":"Mango Je","family":"Fruity","ifra":null},{"id":276,"name":"Mango Mex","family":"Fruity","ifra":null},{"id":277,"name":"Mango Naz","family":"Fruity","ifra":null},{"id":278,"name":"Marc Jacobs Daisy","family":"Uncategorised","ifra":null},{"id":279,"name":"Mascone","family":"Polyclic musk","ifra":null},{"id":280,"name":"Matcha 23 Le Labo","family":"Aromatic","ifra":null},{"id":281,"name":"Mazarine P-16","family":"Uncategorised","ifra":2.0},{"id":282,"name":"Menthyl Acetate","family":"Molecule","ifra":null},{"id":283,"name":"Methly Cedryl Ketone Vertofix","family":"Woody","ifra":10.0},{"id":284,"name":"Methyl Cyclo Pentenolone","family":"Sweet","ifra":null},{"id":285,"name":"Methyl Ionone Gama","family":"Floral","ifra":31.0},{"id":286,"name":"Methyl Laitone","family":"Molecule","ifra":2.0},{"id":287,"name":"Methyl Pamplemousse","family":"Citrus","ifra":1.0},{"id":288,"name":"Methyl Pamplemousse","family":"Fruity","ifra":10.0},{"id":289,"name":"Mica Powder","family":"Uncategorised","ifra":null},{"id":290,"name":"Michael Kors women","family":"Fragrance oil","ifra":null},{"id":291,"name":"Milk Lactone","family":"Lactone","ifra":null},{"id":292,"name":"Mimosa","family":"Floral","ifra":null},{"id":293,"name":"Mimosal","family":"Floral","ifra":1.5},{"id":294,"name":"Mint Abu Simbel","family":"Aromatic","ifra":null},{"id":295,"name":"Miss Dior","family":"Uncategorised","ifra":null},{"id":296,"name":"Modern Vanilla Essence","family":"Sweet","ifra":null},{"id":297,"name":"Mokhalat","family":"Woody","ifra":null},{"id":298,"name":"Molecule 1","family":"Molecule","ifra":null},{"id":299,"name":"Molecule 2","family":"Molecule","ifra":null},{"id":300,"name":"Molecule 3","family":"Molecule","ifra":null},{"id":301,"name":"Money Brown","family":"Fragrance oil","ifra":null},{"id":302,"name":"Money Brown 32oz","family":"Fragrance oil","ifra":null},{"id":303,"name":"Money SOS","family":"Fragrance oil","ifra":null},{"id":304,"name":"Money Sos","family":"Fragrance oil","ifra":null},{"id":305,"name":"Money green","family":"Fragrance oil","ifra":null},{"id":306,"name":"Mulberry","family":"Fruity","ifra":null},{"id":307,"name":"Muscone Firmenich","family":"Macrocyclic musk","ifra":0.47},{"id":308,"name":"Musk Ketone","family":"Uncategorised","ifra":null},{"id":309,"name":"Myrhh","family":"Woody","ifra":null},{"id":310,"name":"Myrrh Sos","family":"Woody","ifra":null},{"id":311,"name":"Myrrh mex","family":"Woody","ifra":null},{"id":312,"name":"Myself YSL","family":"Perfume bases","ifra":null},{"id":313,"name":"Nag Champa  16oz","family":"Musk","ifra":null},{"id":314,"name":"Narcissist perfume","family":"Perfume bases","ifra":null},{"id":315,"name":"Narcissus","family":"Floral","ifra":null},{"id":316,"name":"Neroli","family":"Floral","ifra":null},{"id":317,"name":"Neroli Tincture","family":"Uncategorised","ifra":null},{"id":318,"name":"Neroli mex","family":"Floral","ifra":null},{"id":319,"name":"Noir 29","family":"Perfume bases","ifra":null},{"id":320,"name":"Norlimbanol","family":"Woody","ifra":1.3},{"id":321,"name":"Nutmeg","family":"Gourmound","ifra":null},{"id":322,"name":"Oakmoss","family":"Herbacious","ifra":1.0},{"id":323,"name":"Ocean Propanol","family":"Molecule","ifra":10.0},{"id":324,"name":"Opopanax","family":"Woody","ifra":null},{"id":325,"name":"Orange","family":"Citrus","ifra":null},{"id":326,"name":"Orange blossom","family":"Floral","ifra":null},{"id":327,"name":"Orris","family":"Floral","ifra":null},{"id":328,"name":"Osmanthus Gold Abd","family":"Floral","ifra":null},{"id":329,"name":"Oud Luxe","family":"Musk","ifra":null},{"id":330,"name":"Oud Safi Cambodia","family":"Amber","ifra":null},{"id":331,"name":"Oud Sythetic","family":"Musk","ifra":null},{"id":332,"name":"P vanilla 15 oz","family":"Sweet","ifra":null},{"id":333,"name":"Pachouli","family":"Woody","ifra":null},{"id":334,"name":"Pachouli Eden","family":"Woody","ifra":null},{"id":335,"name":"Pachoulol Crystals","family":"Aromatic","ifra":1.6},{"id":336,"name":"Palo santo tincture","family":"Woody","ifra":null},{"id":337,"name":"Paradise Molecule","family":"Floral","ifra":null},{"id":338,"name":"Passion fruit","family":"Fruity","ifra":null},{"id":339,"name":"Patchouli portable 15 ml","family":"Woody","ifra":null},{"id":340,"name":"Peach","family":"Fruity","ifra":null},{"id":341,"name":"Peach Georgia","family":"Fruity","ifra":null},{"id":342,"name":"Pear Key Accord","family":"Fruity","ifra":5.0},{"id":343,"name":"Peppermint","family":"Aromatic","ifra":null},{"id":344,"name":"Perry Ellis 360","family":"Fragrance oil","ifra":null},{"id":345,"name":"Persian musk","family":"Musk","ifra":null},{"id":346,"name":"Phenyl Ethyl Alcohol","family":"Floral","ifra":4.2},{"id":347,"name":"Pine Aura cacia","family":"Woody","ifra":null},{"id":348,"name":"Pine Es Oil","family":"Woody","ifra":null},{"id":349,"name":"Pine Pinesol","family":"Woody","ifra":null},{"id":350,"name":"Pine Plant Guru","family":"Woody","ifra":null},{"id":351,"name":"Pine SOS","family":"Woody","ifra":null},{"id":352,"name":"Pine import","family":"Woody","ifra":null},{"id":353,"name":"Pineapple","family":"Fruity","ifra":null},{"id":354,"name":"Pineapple Extract","family":"Citrus","ifra":null},{"id":355,"name":"Pink P. Pussy","family":"Fragrance oil","ifra":null},{"id":356,"name":"Pink Peppercorn","family":"Gourmound","ifra":null},{"id":357,"name":"Pink sugar","family":"Fragrance oil","ifra":null},{"id":358,"name":"Pistachio","family":"Uncategorised","ifra":null},{"id":359,"name":"Precyclemone B Aldemone","family":"Aromatic","ifra":10.0},{"id":360,"name":"Pruneau","family":"Gourmound","ifra":null},{"id":361,"name":"Prunells","family":"Gourmound","ifra":null},{"id":362,"name":"Pumpkin spice","family":"Gourmound","ifra":null},{"id":363,"name":"Pwx Factor Fixative","family":"Molecule","ifra":null},{"id":364,"name":"Rain","family":"Molecule","ifra":null},{"id":365,"name":"Rasberry Ketone","family":"Ketone","ifra":1.01},{"id":366,"name":"Raspberry Ketone","family":"Sweet","ifra":null},{"id":367,"name":"Red Door","family":"Fragrance oil","ifra":null},{"id":368,"name":"Red Door","family":"Fragrance oil","ifra":null},{"id":369,"name":"Rhodinol Extra Coer","family":"Floral","ifra":12.0},{"id":370,"name":"Roman  Chamomile","family":"Herbacious","ifra":null},{"id":371,"name":"Romandolide","family":"Molecule","ifra":null},{"id":372,"name":"Rompe Bru.","family":"Fragrance oil","ifra":null},{"id":373,"name":"Rosalva","family":"Floral","ifra":null},{"id":374,"name":"Rose","family":"Floral","ifra":null},{"id":375,"name":"Rose India","family":"Floral","ifra":null},{"id":376,"name":"Rose Oxide","family":"Floral","ifra":2.0},{"id":377,"name":"Rosemary","family":"Aromatic","ifra":null},{"id":378,"name":"Rosemary Pure Je Abs","family":"Uncategorised","ifra":null},{"id":379,"name":"Rosewood Bois De Rose","family":"Woody","ifra":20.0},{"id":380,"name":"Ruda","family":"Herbacious","ifra":null},{"id":381,"name":"Ruda","family":"Herbs","ifra":null},{"id":382,"name":"Rum Co2 10%","family":"Sweet","ifra":0.05},{"id":383,"name":"Sacrocaulonmossamedense","family":"Uncategorised","ifra":null},{"id":384,"name":"Saffron Tinc 10%","family":"Gourmound","ifra":null},{"id":385,"name":"Safraleine","family":"Aromatic","ifra":3.0},{"id":386,"name":"Sage Bundle","family":"Herbs","ifra":null},{"id":387,"name":"Sage Naz","family":"Herbacious","ifra":null},{"id":388,"name":"Sage plant guru","family":"Herbacious","ifra":null},{"id":389,"name":"Saif al misk","family":"Woody","ifra":null},{"id":390,"name":"Sandalore","family":"Woody","ifra":null},{"id":391,"name":"Sandalwood","family":"Woody","ifra":null},{"id":392,"name":"Sandalwood imp 1oz","family":"Woody","ifra":null},{"id":393,"name":"Sandalwood import","family":"Woody","ifra":null},{"id":394,"name":"Santal 33 Le labo","family":"Fragrance oil","ifra":null},{"id":395,"name":"Santaliff","family":"Woody","ifra":40.0},{"id":396,"name":"Sarcocaulon Mossamedense","family":"Aromatic","ifra":null},{"id":397,"name":"Seduction","family":"Uncategorised","ifra":null},{"id":398,"name":"Shay Oud Imp","family":"Musk","ifra":null},{"id":399,"name":"Sichuan Pepper Co2","family":"Aromatic","ifra":null},{"id":400,"name":"Sparkling aldehyde","family":"Molecule","ifra":null},{"id":401,"name":"Special","family":"Woody","ifra":null},{"id":402,"name":"Strawberry","family":"Fruity","ifra":null},{"id":403,"name":"Styrax Absolute","family":"Woody","ifra":null},{"id":404,"name":"Suederal Lt","family":"Molecule","ifra":null},{"id":405,"name":"Sulfur","family":"Herbs","ifra":null},{"id":406,"name":"Superior Egyptian Musk 1oz","family":"Musk","ifra":null},{"id":407,"name":"Sweet pea  10 oz","family":"Sweet","ifra":null},{"id":408,"name":"Tabacco Abs Nic Free","family":"Uncategorised","ifra":null},{"id":409,"name":"Tabbaco Naz","family":"Gourmound","ifra":null},{"id":410,"name":"Tagetes Marigold","family":"Floral","ifra":null},{"id":411,"name":"Tangerine","family":"Citrus","ifra":null},{"id":412,"name":"Tea tree","family":"Aromatic","ifra":null},{"id":413,"name":"The  One","family":"Fragrance oil","ifra":null},{"id":414,"name":"Tom Ford Oudwood Essential","family":"Woody","ifra":null},{"id":415,"name":"TomFord Oudwood","family":"Woody","ifra":null},{"id":416,"name":"Tomate Fueilles","family":"Aromatic","ifra":null},{"id":417,"name":"Tonka bean 2oz","family":"Sweet","ifra":null},{"id":418,"name":"Tubereuse","family":"Woody","ifra":2.0},{"id":419,"name":"Tuberose","family":"Floral","ifra":null},{"id":420,"name":"Tuberose Mexico","family":"Floral","ifra":null},{"id":421,"name":"Tuscan leather","family":"Leather","ifra":null},{"id":422,"name":"Untitled 2","family":"Uncategorised","ifra":null},{"id":423,"name":"Vanilla 28","family":"Uncategorised","ifra":null},{"id":424,"name":"Vanilla Bean","family":"Sweet","ifra":null},{"id":425,"name":"Vanilla Bean Accord","family":"Sweet","ifra":null},{"id":426,"name":"Vanilla Jojoba","family":"Sweet","ifra":null},{"id":427,"name":"Vanilla Plantifolia Jojoba","family":"Amber","ifra":null},{"id":428,"name":"Vanilla extract 8oz","family":"Sweet","ifra":null},{"id":429,"name":"Vanillin Crystals","family":"Sweet","ifra":5.0},{"id":430,"name":"Veramoss","family":"Aromatic","ifra":null},{"id":431,"name":"Vetiver","family":"Woody","ifra":null},{"id":432,"name":"Vetiveryl Acetate","family":"Woody","ifra":null},{"id":433,"name":"Violet","family":"Floral","ifra":null},{"id":434,"name":"Violet Leaf France","family":"Floral","ifra":null},{"id":435,"name":"Vitamin E","family":"Uncategorised","ifra":null},{"id":436,"name":"Vixen","family":"Perfume bases","ifra":null},{"id":437,"name":"Water Accord","family":"Uncategorised","ifra":null},{"id":438,"name":"Watermelon Naz","family":"Fruity","ifra":null},{"id":439,"name":"White amber 30ml","family":"Amber","ifra":null},{"id":440,"name":"White diamond","family":"Fragrance oil","ifra":null},{"id":441,"name":"White musk","family":"Musk","ifra":null},{"id":442,"name":"Wild mint","family":"Aromatic","ifra":null},{"id":443,"name":"Wood Mex","family":"Woody","ifra":null},{"id":444,"name":"Woody Musk","family":"Perfume bases","ifra":null},{"id":445,"name":"Ylang Ylang 3","family":"Uncategorised","ifra":0.73},{"id":446,"name":"Ylang ylang","family":"Floral","ifra":null},{"id":447,"name":"Ylang ylang 1oz Naz","family":"Floral","ifra":null},{"id":448,"name":"Ylang ylang Aura Casia","family":"Floral","ifra":null},{"id":449,"name":"Ysl Libre","family":"Uncategorised","ifra":null},{"id":450,"name":"Yuzu","family":"Citrus","ifra":null},{"id":451,"name":"benzyl benzoate","family":"Molecule","ifra":null},{"id":452,"name":"chocolate","family":"Sweet","ifra":null},{"id":453,"name":"sandal rose","family":"Floral","ifra":null},{"id":454,"name":"white oud","family":"Woody","ifra":null}];
+
+    // ── Icons (inline SVG, no lucide dependency) ──────────────────────────────
+    const Icon = ({ d, size=14, color="currentColor" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d={d}/>
+      </svg>
+    );
+    const SearchIcon = ({size,color}) => <Icon size={size} color={color} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>;
+    const PlusIcon = ({size,color}) => <Icon size={size} color={color} d="M12 5v14M5 12h14"/>;
+    const XIcon = ({size,color}) => <Icon size={size} color={color} d="M18 6L6 18M6 6l12 12"/>;
+    const ChevronIcon = ({size,color}) => <Icon size={size} color={color} d="M6 9l6 6 6-6"/>;
+    const CheckIcon = ({size,color}) => <Icon size={size} color={color} d="M20 6L9 17l-5-5"/>;
+    const SparklesIcon = ({size,color}) => <Icon size={size} color={color} d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3zM5 17l.75 2.25L8 20l-2.25.75L5 23l-.75-2.25L2 20l2.25-.75L5 17zM19 3l.5 1.5L21 5l-1.5.5L19 7l-.5-1.5L17 5l1.5-.5L19 3z"/>;
+    const AlertIcon = ({size,color}) => <Icon size={size} color={color} d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/>;
+    const FlaskIcon = ({size,color}) => <Icon size={size} color={color} d="M9 3h6M9 3v7l-4 9h14L15 10V3M9 3h6"/>;
+    const BeakerIcon = ({size,color}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 3h15M8 3v8.5L3 21h18l-5-9.5V3"/></svg>;
+
+    // ── FamilyChip ────────────────────────────────────────────────────────────
+    function FamilyChip({ family }) {
+      const c = familyColor(family);
+      return (
+        <span style={{ fontSize:10, fontWeight:600, letterSpacing:"0.04em", background:c.bg, color:c.text, borderRadius:20, padding:"2px 7px", display:"inline-flex", alignItems:"center", gap:4 }}>
+          <span style={{ width:5, height:5, borderRadius:"50%", background:c.dot }} />
+          {family}
+        </span>
+      );
+    }
+
+    // ── StrengthBar ───────────────────────────────────────────────────────────
+    function StrengthBar({ value, onChange, ifraLimit }) {
+      const pct = STRENGTHS[value].pct;
+      const overIfra = ifraLimit !== null && pct > ifraLimit;
+      const fillColor = overIfra ? "#EF4444" : STRENGTHS[value].color;
+      const fillPct = (value / 4) * 100;
+      return (
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+            <span style={{ fontSize:11, fontWeight:600, color: overIfra?"#EF4444":"#374151", letterSpacing:"0.05em", textTransform:"uppercase" }}>
+              {STRENGTHS[value].label}
+            </span>
+            <span style={{ fontSize:10, color: overIfra?"#EF4444":"#9CA3AF", display:"flex", alignItems:"center", gap:3 }}>
+              {overIfra && <AlertIcon size={9} color="#EF4444"/>}
+              ~{pct}%{ifraLimit !== null && ` · IFRA ${ifraLimit}%`}
+            </span>
+          </div>
+          <div style={{ position:"relative", height:6, borderRadius:999, background:"#F1F5F9", cursor:"pointer", overflow:"hidden" }}
+            onClick={(e) => { const r=e.currentTarget.getBoundingClientRect(); onChange(Math.min(4,Math.max(0,Math.round((e.clientX-r.left)/r.width*4)))); }}>
+            <div style={{ height:"100%", width:`${fillPct}%`, borderRadius:999, background:fillColor, transition:"width 0.15s ease, background 0.15s ease" }} />
+            {[1,2,3].map(i => <div key={i} style={{ position:"absolute", top:0, left:`${(i/4)*100}%`, width:1, height:"100%", background:"white", opacity:0.8 }} />)}
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", marginTop:3 }}>
+            {STRENGTHS.map((s,i) => (
+              <button key={i} onClick={() => onChange(i)} style={{ fontSize:9, color: i===value?"#1E293B":"#CBD5E1", background:"none", border:"none", cursor:"pointer", padding:0, fontWeight: i===value?700:400, letterSpacing:"0.03em" }}>
+                {s.label[0]}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ── ZoneBadge ─────────────────────────────────────────────────────────────
+    function ZoneBadge({ zone, onChange }) {
+      const [open, setOpen] = useState(false);
+      return (
+        <div style={{ position:"relative" }}>
+          <button onClick={() => setOpen(!open)} style={{ display:"flex", alignItems:"center", gap:4, background:ZONE_COLORS[zone], border:"none", borderRadius:20, padding:"3px 8px", cursor:"pointer", fontSize:11, fontWeight:600, color:ZONE_DOT[zone] }}>
+            <span style={{ width:6, height:6, borderRadius:"50%", background:ZONE_DOT[zone] }} />
+            {ZONE_LABELS[zone]}
+            <ChevronIcon size={9} color={ZONE_DOT[zone]}/>
+          </button>
+          {open && (
+            <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, zIndex:50, background:"white", borderRadius:8, boxShadow:"0 4px 20px rgba(0,0,0,0.12)", border:"1px solid #E2E8F0", overflow:"hidden", minWidth:80 }}>
+              {ZONES.map(z => (
+                <button key={z} onClick={() => { onChange(z); setOpen(false); }} style={{ display:"flex", alignItems:"center", gap:6, width:"100%", padding:"7px 12px", background: z===zone?"#F8FAFC":"white", border:"none", cursor:"pointer", fontSize:11, fontWeight: z===zone?700:400, color:ZONE_DOT[z], textAlign:"left" }}>
+                  <span style={{ width:6, height:6, borderRadius:"50%", background:ZONE_DOT[z] }} />
+                  {ZONE_LABELS[z]}
+                  {z===zone && <CheckIcon size={10} color={ZONE_DOT[z]}/>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ── CompositionSummary ────────────────────────────────────────────────────
+    function CompositionSummary({ selected }) {
+      const byFamily = useMemo(() => {
+        const map = {};
+        selected.forEach(i => { const w=STRENGTHS[i.strength].pct; map[i.family]=(map[i.family]||0)+w; });
+        const total = Object.values(map).reduce((a,b)=>a+b,0)||1;
+        return Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([fam,w])=>({ fam, pct:Math.round((w/total)*100) }));
+      }, [selected]);
+      const byZone = useMemo(() => {
+        const map={top:0,heart:0,base:0};
+        selected.forEach(i=>{map[i.zone]+=STRENGTHS[i.strength].pct;});
+        const total=Object.values(map).reduce((a,b)=>a+b,0)||1;
+        return Object.entries(map).map(([z,w])=>({z,pct:Math.round((w/total)*100)}));
+      }, [selected]);
+      if (!selected.length) return null;
+      return (
+        <div style={{ padding:"0 20px 16px" }}>
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:10, fontWeight:700, color:"#94A3B8", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:5 }}>Structure</div>
+            <div style={{ display:"flex", height:5, borderRadius:999, overflow:"hidden", gap:1 }}>
+              {byZone.map(({z,pct})=>pct>0&&<div key={z} style={{ flex:pct, background:ZONE_DOT[z], borderRadius:999 }} title={`${ZONE_LABELS[z]}: ${pct}%`}/>)}
+            </div>
+            <div style={{ display:"flex", gap:10, marginTop:4 }}>
+              {byZone.map(({z,pct})=><span key={z} style={{ fontSize:9, color:ZONE_DOT[z], fontWeight:600 }}>{ZONE_LABELS[z]} {pct}%</span>)}
+            </div>
+          </div>
+          <div style={{ fontSize:10, fontWeight:700, color:"#94A3B8", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:6 }}>Olfactive profile</div>
+          <div style={{ display:"flex", gap:2, height:20, borderRadius:6, overflow:"hidden" }}>
+            {byFamily.map(({fam,pct})=><div key={fam} style={{ flex:pct, background:familyColor(fam).dot, opacity:0.85 }} title={`${fam}: ${pct}%`}/>)}
+          </div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:"4px 8px", marginTop:5 }}>
+            {byFamily.slice(0,5).map(({fam,pct})=><span key={fam} style={{ fontSize:9, color:familyColor(fam).dot, fontWeight:600 }}>{fam} {pct}%</span>)}
+          </div>
+        </div>
+      );
+    }
+
+    // ── ScentProfile (right panel) ────────────────────────────────────────────
+    function ScentProfile({ selected }) {
+      const byFamily = useMemo(() => {
+        const map = {};
+        selected.forEach(i => { const w=STRENGTHS[i.strength].pct; if(!map[i.family]) map[i.family]={total:0,items:[]}; map[i.family].total+=w; map[i.family].items.push(i); });
+        return Object.entries(map).sort((a,b)=>b[1].total-a[1].total).map(([fam,{total,items}])=>({fam,total,items}));
+      }, [selected]);
+      const grandTotal = byFamily.reduce((a,b)=>a+b.total,0)||1;
+      const tiles = useMemo(() => selected.slice().sort((a,b)=>b.strength-a.strength).map(i=>({ ...i, size:[24,32,44,60,80][i.strength], color:familyColor(i.family).dot, bg:familyColor(i.family).bg })), [selected]);
+      return (
+        <div style={{ width:220, borderLeft:"1px solid #EEF0F4", background:"white", display:"flex", flexDirection:"column", flexShrink:0 }}>
+          <div style={{ padding:"16px 16px 10px", borderBottom:"1px solid #EEF0F4" }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#94A3B8", letterSpacing:"0.08em", textTransform:"uppercase" }}>Scent Profile</div>
+          </div>
+          {!selected.length ? (
+            <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", opacity:0.35, gap:8, padding:20 }}>
+              <FlaskIcon size={28} color="#94A3B8"/>
+              <div style={{ fontSize:11, color:"#94A3B8", textAlign:"center", lineHeight:1.4 }}>Add materials to see your scent profile</div>
+            </div>
+          ) : (
+            <div style={{ flex:1, overflowY:"auto", padding:"14px 14px 20px" }}>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:4, padding:10, borderRadius:12, background:"#F8F9FB", marginBottom:16, minHeight:80 }}>
+                {tiles.map(tile=>(
+                  <div key={tile.id} title={`${tile.name} · ${STRENGTHS[tile.strength].label}`} style={{ width:tile.size, height:tile.size, borderRadius:tile.size>44?10:6, background:tile.color, opacity:0.75+(tile.strength*0.05), transition:"all 0.2s", flexShrink:0 }}/>
+                ))}
+              </div>
+              <div style={{ fontSize:10, fontWeight:700, color:"#94A3B8", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:10 }}>By Family</div>
+              {byFamily.map(({fam,total,items})=>{
+                const pct=Math.round((total/grandTotal)*100), c=familyColor(fam);
+                return (
+                  <div key={fam} style={{ marginBottom:10 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                        <span style={{ width:7, height:7, borderRadius:"50%", background:c.dot, flexShrink:0 }}/>
+                        <span style={{ fontSize:11, fontWeight:600, color:c.text }}>{fam}</span>
+                      </div>
+                      <span style={{ fontSize:10, color:"#94A3B8", fontWeight:600 }}>{pct}%</span>
+                    </div>
+                    <div style={{ height:4, borderRadius:999, background:"#F1F5F9", overflow:"hidden" }}>
+                      <div style={{ height:"100%", width:`${pct}%`, borderRadius:999, background:c.dot, opacity:0.7, transition:"width 0.3s ease" }}/>
+                    </div>
+                    <div style={{ marginTop:3, display:"flex", flexWrap:"wrap", gap:3 }}>
+                      {items.map(i=><span key={i.id} style={{ fontSize:9, color:c.text, background:c.bg, borderRadius:4, padding:"1px 5px", fontWeight:500 }}>{i.name.length>14?i.name.slice(0,13)+"…":i.name}</span>)}
+                    </div>
+                  </div>
+                );
+              })}
+              {byFamily.length>0&&(
+                <div style={{ marginTop:14, padding:"10px 12px", borderRadius:10, background:familyColor(byFamily[0].fam).bg, border:`1px solid ${familyColor(byFamily[0].fam).dot}22` }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:"#94A3B8", letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:3 }}>Dominant character</div>
+                  <div style={{ fontSize:13, fontWeight:700, color:familyColor(byFamily[0].fam).text, fontFamily:"'Playfair Display', serif", fontStyle:"italic" }}>{byFamily[0].fam}</div>
+                  <div style={{ fontSize:10, color:"#94A3B8", marginTop:2 }}>{Math.round((byFamily[0].total/grandTotal)*100)}% of composition</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ── Main App ──────────────────────────────────────────────────────────────
+    function ScentEngine() {
+      const [search, setSearch] = useState("");
+      const [activeFamily, setActiveFamily] = useState("All");
+      const [leftTab, setLeftTab] = useState("materials");
+      const [accordSearch, setAccordSearch] = useState("");
+      const [selected, setSelected] = useState([]);
+      const [buildName, setBuildName] = useState("Untitled Scent");
+      const [editingName, setEditingName] = useState(false);
+      const [sent, setSent] = useState(false);
+      const [nameError, setNameError] = useState(false);
+      const [saves, setSaves] = useState(() => { try { return JSON.parse(localStorage.getItem("scent_saves")||"[]"); } catch(e){ return []; } });
+      const [showSaves, setShowSaves] = useState(false);
+      const [saveFlash, setSaveFlash] = useState(false);
+      const nameRef = useRef(null);
+
+      useEffect(() => { if (editingName) nameRef.current && nameRef.current.focus(); }, [editingName]);
+
+      const filtered = useMemo(() => INGREDIENTS.filter(i => i.name.toLowerCase().includes(search.toLowerCase()) && (activeFamily==="All"||i.family===activeFamily)).slice(0,60), [search, activeFamily]);
+
+      const addIngredient = (ing) => { if (!selected.find(i=>i.id===ing.id)) setSelected(prev=>[...prev,{...ing,strength:2,zone:"heart"}]); };
+      const addAccord = (accord) => {
+        const id=`accord-${accord.id}`;
+        if (!selected.find(i=>i.id===id)) setSelected(prev=>[...prev,{ id, name:`#${accord.num} ${accord.name}`, family:accord.family, ifra:null, strength:2, zone:"heart", isAccord:true, accordNum:accord.num, descriptor:accord.descriptor }]);
+      };
+      const updateStrength = (id,val) => setSelected(prev=>prev.map(i=>i.id===id?{...i,strength:val}:i));
+      const updateZone = (id,zone) => setSelected(prev=>prev.map(i=>i.id===id?{...i,zone}:i));
+      const removeIngredient = (id) => setSelected(prev=>prev.filter(i=>i.id!==id));
+
+      const totalLoad = selected.reduce((acc,i)=>acc+STRENGTHS[i.strength].pct,0);
+      const hasIfraWarning = selected.some(i=>i.ifra!==null&&STRENGTHS[i.strength].pct>i.ifra);
+
+      const isNameValid = buildName.trim().length > 0 && buildName.trim() !== "Untitled Scent";
+      const canSend = selected.length > 0 && isNameValid;
+
+      const triggerNameError = () => {
+        setNameError(true);
+        setEditingName(true);
+        setTimeout(() => setNameError(false), 600);
+      };
+
+      const handleSend = () => {
+        if (!isNameValid) { triggerNameError(); return; }
+        if (!selected.length) return;
+        setSent(true);
+        setTimeout(() => setSent(false), 2000);
+      };
+
+      const handleSave = () => {
+        if (!isNameValid) { triggerNameError(); return; }
+        if (!selected.length) return;
+        const newSave = { id: Date.now(), name: buildName.trim(), date: new Date().toLocaleDateString(), selected, totalLoad: Math.round(totalLoad) };
+        const updated = [newSave, ...saves.filter(s=>s.name!==newSave.name)].slice(0,20);
+        setSaves(updated);
+        localStorage.setItem("scent_saves", JSON.stringify(updated));
+        setSaveFlash(true);
+        setTimeout(() => setSaveFlash(false), 1500);
+      };
+
+      const handleLoad = (save) => {
+        setBuildName(save.name);
+        setSelected(save.selected);
+        setShowSaves(false);
+      };
+
+      const handleDelete = (id, e) => {
+        e.stopPropagation();
+        const updated = saves.filter(s=>s.id!==id);
+        setSaves(updated);
+        localStorage.setItem("scent_saves", JSON.stringify(updated));
+      };
+
+      const handleNew = () => {
+        setBuildName("Untitled Scent");
+        setSelected([]);
+        setShowSaves(false);
+      };
+
+      const zoneGroups = useMemo(() => { const g={top:[],heart:[],base:[]}; selected.forEach(i=>g[i.zone].push(i)); return g; }, [selected]);
+      const famFilters = ["All","Floral","Woody","Amber","Citrus","Musk","Aromatic","Fruity","Sweet","Molecule"];
+
+      return (
+        <div style={{ display:"flex", height:"100vh", fontFamily:"'DM Sans',system-ui,sans-serif", background:"#F8F9FB", overflow:"hidden" }}>
+
+          {/* LEFT */}
+          <div style={{ width:280, background:"white", borderRight:"1px solid #EEF0F4", display:"flex", flexDirection:"column", boxShadow:"2px 0 12px rgba(0,0,0,0.04)" }}>
+            <div style={{ padding:"20px 16px 12px" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+                <div style={{ width:28, height:28, borderRadius:8, background:"linear-gradient(135deg,#1E293B,#334155)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <BeakerIcon size={14} color="white"/>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", letterSpacing:"-0.01em" }}>Scent Engine</div>
+                  <div style={{ fontSize:10, color:"#94A3B8", fontWeight:500 }}>Studio Perfumers</div>
+                </div>
+                {/* Saves button */}
+                <button onClick={()=>setShowSaves(!showSaves)} style={{ fontSize:10, fontWeight:700, color:"#6366F1", background:"#EEF2FF", border:"none", borderRadius:6, padding:"4px 8px", cursor:"pointer", position:"relative" }}>
+                  Saved {saves.length>0&&<span style={{ marginLeft:3, background:"#6366F1", color:"white", borderRadius:10, padding:"1px 5px", fontSize:9 }}>{saves.length}</span>}
+                </button>
+              </div>
+
+              {/* Saves panel */}
+              {showSaves && (
+                <div style={{ marginBottom:12, background:"#F8F9FB", borderRadius:10, border:"1px solid #EEF0F4", overflow:"hidden" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 10px", borderBottom:"1px solid #EEF0F4" }}>
+                    <span style={{ fontSize:10, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.06em" }}>Saved Builds</span>
+                    <button onClick={handleNew} style={{ fontSize:10, fontWeight:700, color:"#10B981", background:"none", border:"none", cursor:"pointer" }}>+ New</button>
+                  </div>
+                  {saves.length===0 ? (
+                    <div style={{ padding:"12px 10px", fontSize:11, color:"#94A3B8", textAlign:"center" }}>No saves yet</div>
+                  ) : (
+                    <div style={{ maxHeight:180, overflowY:"auto" }}>
+                      {saves.map(s=>(
+                        <div key={s.id} onClick={()=>handleLoad(s)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 10px", cursor:"pointer", borderBottom:"1px solid #F1F5F9" }}
+                          onMouseOver={e=>e.currentTarget.style.background="#F0F4FF"} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                          <div>
+                            <div style={{ fontSize:12, fontWeight:600, color:"#1E293B" }}>{s.name}</div>
+                            <div style={{ fontSize:10, color:"#94A3B8" }}>{s.date} · {s.selected.length} materials · ~{s.totalLoad}%</div>
+                          </div>
+                          <button onClick={e=>handleDelete(s.id,e)} style={{ width:18, height:18, borderRadius:"50%", background:"#FEE2E2", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                            <XIcon size={9} color="#EF4444"/>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{ display:"flex", gap:2, background:"#F1F5F9", borderRadius:8, padding:3, marginBottom:12 }}>
+                {[["materials","Materials"],["accords","Accords"]].map(([key,label])=>(
+                  <button key={key} onClick={()=>setLeftTab(key)} style={{ flex:1, padding:"5px 0", borderRadius:6, border:"none", cursor:"pointer", fontSize:11, fontWeight:700, background:leftTab===key?"white":"transparent", color:leftTab===key?"#1E293B":"#94A3B8", boxShadow:leftTab===key?"0 1px 4px rgba(0,0,0,0.08)":"none", transition:"all 0.15s" }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:8, background:"#F8F9FB", border:"1px solid #EEF0F4", borderRadius:10, padding:"8px 12px" }}>
+                <SearchIcon size={13} color="#94A3B8"/>
+                <input placeholder={leftTab==="materials"?`Search ${INGREDIENTS.length} materials…`:"Search accords…"} value={leftTab==="materials"?search:accordSearch} onChange={e=>leftTab==="materials"?setSearch(e.target.value):setAccordSearch(e.target.value)} style={{ border:"none", outline:"none", background:"none", fontSize:13, color:"#374151", width:"100%" }}/>
+                {(leftTab==="materials"?search:accordSearch)&&<button onClick={()=>leftTab==="materials"?setSearch(""):setAccordSearch("")} style={{ background:"none", border:"none", cursor:"pointer", padding:0, color:"#94A3B8" }}><XIcon size={12}/></button>}
+              </div>
+            </div>
+
+            {leftTab==="materials"&&(
+              <>
+                <div style={{ paddingLeft:16, paddingRight:8, paddingBottom:10, display:"flex", gap:5, overflowX:"auto", flexShrink:0 }}>
+                  {famFilters.map(f=>{ const active=activeFamily===f, c=f==="All"?null:familyColor(f); return (
+                    <button key={f} className="fam-chip" onClick={()=>setActiveFamily(f)} style={{ flexShrink:0, fontSize:10, fontWeight:600, padding:"4px 10px", borderRadius:20, cursor:"pointer", border:active?"1px solid transparent":"1px solid #E2E8F0", background:active?(c?c.bg:"#1E293B"):"white", color:active?(c?c.text:"white"):"#6B7280", letterSpacing:"0.03em" }}>
+                      {f}
+                    </button>
+                  );})}
+                </div>
+                <div style={{ padding:"0 16px 8px", fontSize:10, color:"#94A3B8", fontWeight:500 }}>{filtered.length} materials{filtered.length===60?" (first 60)":""}</div>
+                <div style={{ flex:1, overflowY:"auto", padding:"0 8px 16px" }}>
+                  {filtered.map(ing=>{ const isAdded=selected.some(i=>i.id===ing.id); return (
+                    <div key={ing.id} className="ing-row" onClick={()=>!isAdded&&addIngredient(ing)} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"7px 8px", borderRadius:8, cursor:isAdded?"default":"pointer", background:isAdded?"#F0FDF4":"white", marginBottom:1, opacity:isAdded?0.6:1 }}>
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontSize:12, fontWeight:500, color:"#1E293B", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:180 }}>{ing.name}</div>
+                        <div style={{ marginTop:2 }}><FamilyChip family={ing.family}/></div>
+                      </div>
+                      <button className="add-btn" onClick={e=>{e.stopPropagation();if(!isAdded)addIngredient(ing);}} style={{ flexShrink:0, width:22, height:22, borderRadius:"50%", background:isAdded?"#86EFAC":"#1E293B", border:"none", cursor:isAdded?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", opacity:isAdded?1:0, transition:"opacity 0.15s" }}>
+                        {isAdded?<CheckIcon size={11} color="white"/>:<PlusIcon size={11} color="white"/>}
+                      </button>
+                    </div>
+                  );})}
+                </div>
+              </>
+            )}
+
+            {leftTab==="accords"&&(
+              <div style={{ flex:1, overflowY:"auto", padding:"0 8px 16px" }}>
+                <div style={{ padding:"0 8px 8px", fontSize:10, color:"#94A3B8", fontWeight:500 }}>25 house accords</div>
+                {ACCORDS.filter(a=>a.name.toLowerCase().includes(accordSearch.toLowerCase())||a.descriptor.toLowerCase().includes(accordSearch.toLowerCase())||a.tags.some(t=>t.toLowerCase().includes(accordSearch.toLowerCase()))).map(accord=>{
+                  const isAdded=selected.some(i=>i.id===`accord-${accord.id}`), c=familyColor(accord.family);
+                  return (
+                    <div key={accord.id} className="ing-row" onClick={()=>!isAdded&&addAccord(accord)} style={{ padding:"9px 10px", borderRadius:10, marginBottom:4, cursor:isAdded?"default":"pointer", background:isAdded?"#F0FDF4":"white", border:`1px solid ${c.dot}22`, borderLeft:`3px solid ${c.dot}`, opacity:isAdded?0.7:1 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:2 }}>
+                            <span style={{ fontSize:9, fontWeight:800, color:"white", background:c.dot, borderRadius:4, padding:"1px 5px", flexShrink:0 }}>{accord.num}</span>
+                            <span style={{ fontSize:12, fontWeight:700, color:"#1E293B", letterSpacing:"-0.01em" }}>{accord.name}</span>
+                          </div>
+                          <div style={{ fontSize:10, color:"#64748B", lineHeight:1.3, marginBottom:4 }}>{accord.descriptor}</div>
+                          <div style={{ display:"flex", flexWrap:"wrap", gap:3 }}>
+                            {accord.tags.map(tag=><span key={tag} style={{ fontSize:9, color:c.text, background:c.bg, borderRadius:4, padding:"1px 5px", fontWeight:600 }}>{tag}</span>)}
+                          </div>
+                        </div>
+                        <button onClick={e=>{e.stopPropagation();if(!isAdded)addAccord(accord);}} style={{ flexShrink:0, width:22, height:22, borderRadius:"50%", background:isAdded?"#86EFAC":c.dot, border:"none", cursor:isAdded?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", marginLeft:6, marginTop:2 }}>
+                          {isAdded?<CheckIcon size={11} color="white"/>:<PlusIcon size={11} color="white"/>}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* CENTER */}
+          <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0 }}>
+            <div style={{ padding:"16px 24px", background:"white", borderBottom:"1px solid #EEF0F4", display:"flex", alignItems:"center", justifyContent:"space-between", boxShadow:"0 1px 8px rgba(0,0,0,0.04)" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                {editingName?(
+                  <input ref={nameRef} value={buildName} onChange={e=>setBuildName(e.target.value)} onBlur={()=>setEditingName(false)} onKeyDown={e=>e.key==="Enter"&&setEditingName(false)}
+                    className={nameError?"shake":""}
+                    style={{ fontSize:18, fontWeight:700, color: nameError?"#EF4444":"#1E293B", border:"none", borderBottom:`2px solid ${nameError?"#EF4444":"#6366F1"}`, outline:"none", background:"none", fontFamily:"'Playfair Display',Georgia,serif", fontStyle:"italic", minWidth:200 }}/>
+                ):(
+                  <h1 onClick={()=>setEditingName(true)}
+                    className={nameError?"shake":""}
+                    style={{ fontSize:18, fontWeight:600, color: nameError?"#EF4444":"#1E293B", margin:0, cursor:"text", fontFamily:"'Playfair Display',Georgia,serif", fontStyle:"italic", letterSpacing:"-0.01em", borderBottom: nameError?"2px solid #EF4444":"2px solid transparent", paddingBottom:2 }}>
+                    {buildName}
+                  </h1>
+                )}
+                {nameError&&<span style={{ fontSize:11, color:"#EF4444", fontWeight:600 }}>← Give your scent a name</span>}
+                {!nameError&&selected.length>0&&(
+                  <span style={{ fontSize:11, fontWeight:600, color:"#6B7280", background:"#F1F5F9", borderRadius:20, padding:"2px 10px" }}>
+                    {selected.length} material{selected.length!==1?"s":""} · <span style={{ color:totalLoad>50?"#F59E0B":"#10B981" }}>~{totalLoad.toFixed(0)}% load</span>
+                  </span>
+                )}
+                {hasIfraWarning&&!nameError&&<span style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:"#EF4444", fontWeight:600 }}><AlertIcon size={12} color="#EF4444"/> IFRA warning</span>}
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={handleSave} disabled={!selected.length} style={{ display:"flex", alignItems:"center", gap:6, background: saveFlash?"#10B981":"#F1F5F9", color: saveFlash?"white":"#374151", border:"none", padding:"9px 14px", borderRadius:10, cursor:selected.length?"pointer":"not-allowed", fontSize:13, fontWeight:600, opacity:selected.length?1:0.4, transition:"all 0.2s" }}>
+                  {saveFlash?"Saved!":"Save"}
+                </button>
+                <button onClick={handleSend} disabled={!selected.length} style={{ display:"flex", alignItems:"center", gap:6, background:sent?"#10B981":"#1E293B", color:"white", border:"none", padding:"9px 18px", borderRadius:10, cursor:selected.length?"pointer":"not-allowed", fontSize:13, fontWeight:600, opacity:selected.length?1:0.4, transition:"background 0.2s" }}>
+                  {sent?<><CheckIcon size={14} color="white"/> Sent!</>:<><SparklesIcon size={14} color="white"/> Send to Lab</>}
+                </button>
+              </div>
+            </div>
+
+            <CompositionSummary selected={selected}/>
+
+            <div style={{ flex:1, overflowY:"auto", padding:"0 20px 24px" }}>
+              {!selected.length?(
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"60%", gap:12, opacity:0.5 }}>
+                  <div style={{ fontSize:32 }}>🧪</div>
+                  <div style={{ fontSize:14, color:"#94A3B8", fontWeight:500 }}>Search and add materials to begin</div>
+                  <div style={{ fontSize:11, color:"#CBD5E1" }}>{INGREDIENTS.length} materials · {ACCORDS.length} accords available</div>
+                </div>
+              ):(
+                ZONES.map(zone=>{
+                  const items=zoneGroups[zone];
+                  if (!items.length) return null;
+                  return (
+                    <div key={zone} style={{ marginBottom:20 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8, paddingBottom:6, borderBottom:`2px solid ${ZONE_COLORS[zone]}` }}>
+                        <span style={{ width:8, height:8, borderRadius:"50%", background:ZONE_DOT[zone] }}/>
+                        <span style={{ fontSize:11, fontWeight:700, color:ZONE_DOT[zone], letterSpacing:"0.06em", textTransform:"uppercase" }}>{ZONE_LABELS[zone]} notes</span>
+                        <span style={{ fontSize:10, color:"#CBD5E1" }}>({items.length})</span>
+                      </div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                        {items.map(ing=>(
+                          <div key={ing.id} style={{ display:"flex", alignItems:"center", gap:12, background:familyColor(ing.family).bg, padding:"12px 14px", borderRadius:12, border:`1px solid ${familyColor(ing.family).dot}28`, borderLeft:`3px solid ${familyColor(ing.family).dot}`, boxShadow:"0 1px 4px rgba(0,0,0,0.03)" }}>
+                            <div style={{ minWidth:140, maxWidth:140 }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:3 }}>
+                                {ing.isAccord&&<span style={{ fontSize:9, fontWeight:800, color:"white", background:familyColor(ing.family).dot, borderRadius:4, padding:"1px 5px", flexShrink:0 }}>#{ing.accordNum}</span>}
+                                <div style={{ fontSize:13, fontWeight:600, color:"#1E293B", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{ing.isAccord?ing.name.replace(`#${ing.accordNum} `,""):ing.name}</div>
+                              </div>
+                              <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                                <FamilyChip family={ing.family}/>
+                                {!ing.isAccord&&ing.ifra!==null&&<span style={{ fontSize:9, color:"#94A3B8" }}>lim {ing.ifra}%</span>}
+                              </div>
+                              {ing.isAccord&&ing.descriptor&&<div style={{ fontSize:9, color:"#94A3B8", marginTop:2, lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ing.descriptor}</div>}
+                            </div>
+                            <StrengthBar value={ing.strength} onChange={v=>updateStrength(ing.id,v)} ifraLimit={ing.ifra}/>
+                            <ZoneBadge zone={ing.zone} onChange={z=>updateZone(ing.id,z)}/>
+                            <button onClick={()=>removeIngredient(ing.id)} style={{ width:24, height:24, borderRadius:"50%", background:"#FEE2E2", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }} onMouseOver={e=>e.currentTarget.style.background="#FECACA"} onMouseOut={e=>e.currentTarget.style.background="#FEE2E2"}>
+                              <XIcon size={11} color="#EF4444"/>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT */}
+          <ScentProfile selected={selected}/>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<ScentEngine/>);
+  </script>
+</body>
+</html>
